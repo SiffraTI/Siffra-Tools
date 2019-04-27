@@ -3,20 +3,38 @@ package Siffra::Tools;
 use 5.014;
 use strict;
 use warnings;
+use Carp;
 use utf8;
+use Data::Dumper;
+use DDP;
 use Log::Any qw($log);
- 
-BEGIN {
+use Scalar::Util qw(blessed);
+$Carp::Verbose = 1;
+
+$| = 1;    #autoflush
+
+use constant {
+    FALSE => 0,
+    TRUE  => 1,
+    DEBUG => $ENV{ DEBUG } // 0,
+};
+
+BEGIN
+{
+    binmode( STDOUT, ":encoding(UTF-8)" );
+    binmode( STDERR, ":encoding(UTF-8)" );
+
+    require Siffra::Base;
     use Exporter ();
     use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
-    $VERSION     = '0.01';
-    @ISA         = qw(Exporter);
+    $VERSION = '0.05';
+    @ISA     = qw(Siffra::Base Exporter);
+
     #Give a hoot don't pollute, do not export more than needed by default
     @EXPORT      = qw();
     @EXPORT_OK   = qw();
     %EXPORT_TAGS = ();
-}
- 
+} ## end BEGIN
 
 #################### subroutine header begin ####################
 
@@ -36,9 +54,8 @@ See Also   :
 
 #################### subroutine header end ####################
 
-
 =head2 C<new()>
- 
+
   Usage     : $self->block_new_method() within text_pm_file()
   Purpose   : Build 'new()' method as part of a pm file
   Returns   : String holding sub new.
@@ -49,48 +66,89 @@ See Also   :
   Comment   : This method is a likely candidate for alteration in a subclass,
               e.g., pass a single hash-ref to new() instead of a list of
               parameters.
- 
+
 =cut
- 
+
 sub new
 {
-    my ($class, %parameters) = @_;
+    my ( $class, %parameters ) = @_;
+    $log->debug( "new", { progname => $0, pid => $$, perl_version => $], package => __PACKAGE__ } );
 
-    my $self = {};
- 
-    $self = bless ($self, ref ($class) || $class);
+    my $self = $class->SUPER::new( %parameters );
 
-    $log->info( "new", { progname => $0, pid => $$, perl_version => $], package => __PACKAGE__ } );
- 
     return $self;
-}
- 
-sub _initialize() {
-	my ( $self, %parameters ) = @_;
-	$log->info( "_initialize", { package => __PACKAGE__ } );
+} ## end sub new
+
+sub _initialize()
+{
+    my ( $self, %parameters ) = @_;
+    $log->debug( "_initialize", { package => __PACKAGE__ } );
+
+    require JSON::XS;
+    $self->{ json } = JSON::XS->new->utf8;
+} ## end sub _initialize
+
+sub END
+{
+    $log->debug( "END", { package => __PACKAGE__ } );
+    eval { $log->{ adapter }->{ dispatcher }->{ outputs }->{ Email }->flush; };
 }
 
-sub END {
-	$log->info( "END", { package => __PACKAGE__ } );
-}
+sub DESTROY
+{
+    my ( $self, %parameters ) = @_;
+    $log->debug( 'DESTROY', { package => __PACKAGE__, GLOBAL_PHASE => ${^GLOBAL_PHASE}, blessed => FALSE } );
+    return if ${^GLOBAL_PHASE} eq 'DESTRUCT';
 
-sub DESTROY {
-	my ( $self, %parameters ) = @_;
-	$log->info( 'DESTROY', { package => __PACKAGE__, GLOBAL_PHASE => ${^GLOBAL_PHASE} } );
-	return if ${^GLOBAL_PHASE} eq 'DESTRUCT';
+    if ( blessed( $self ) && $self->isa( __PACKAGE__ ) )
+    {
+        $log->debug( "DESTROY", { package => __PACKAGE__, GLOBAL_PHASE => ${^GLOBAL_PHASE}, blessed => TRUE } );
+    }
+    else
+    {
+        # TODO
+    }
+} ## end sub DESTROY
 
-	if ( blessed($self) && $self->isa(__PACKAGE__) ) {
-		$log->alert( "DESTROY", { package => __PACKAGE__, GLOBAL_PHASE => ${^GLOBAL_PHASE}, blessed => 1 } );
-	}
-	else {
-		# TODO
-	}
-}
- 
+=head2 C<getFileMD5()>
+
+  Usage     : $self->block_new_method() within text_pm_file()
+  Purpose   : Build 'new()' method as part of a pm file
+  Returns   : String holding sub new.
+  Argument  : $module: pointer to the module being built
+              (as there can be more than one module built by EU::MM);
+              for the primary module it is a pointer to $self
+  Throws    : n/a
+  Comment   : This method is a likely candidate for alteration in a subclass,
+              e.g., pass a single hash-ref to new() instead of a list of
+              parameters.
+
+=cut
+
+#-------------------------------------------------------------------------------
+# Retorna o MD5 do arquivo
+# Parametro 1 - Caminho e nome do arquivo a ser calculado
+# Retorna o MD5 do arquivo informado
+#-------------------------------------------------------------------------------
+sub getFileMD5($)
+{
+    my ( $self, %parameters ) = @_;
+    my $file = $parameters{ file };
+    my $return;
+    require Digest::MD5;
+    if ( open( my $fh, $file ) )
+    {
+        binmode( $fh );
+        $return = Digest::MD5->new->addfile( $fh )->hexdigest;
+        close( $fh );
+    } ## end if ( open( my $fh, $file...))
+
+    return $return;
+} ## end sub getFileMD5($)
+
 #################### main pod documentation begin ###################
 ## Below is the stub of documentation for your module.
 ## You better edit it!
- 
 
 =encoding UTF-8
 
@@ -146,12 +204,12 @@ LICENSE file included with this module.
 =head1 SEE ALSO
 
 perl(1).
- 
+
 =cut
- 
+
 #################### main pod documentation end ###################
- 
 
 1;
+
 # The preceding line will help the module return a true value
 
