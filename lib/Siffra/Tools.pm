@@ -72,12 +72,9 @@ See Also   :
 sub new
 {
     my ( $class, %parameters ) = @_;
-
-    my $self = {};
-
-    $self = bless( $self, ref( $class ) || $class );
-
     $log->debug( "new", { progname => $0, pid => $$, perl_version => $], package => __PACKAGE__ } );
+
+    my $self = $class->SUPER::new( %parameters );
 
     return $self;
 } ## end sub new
