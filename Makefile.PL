@@ -29,6 +29,7 @@ my %WriteMakefileArgs = (
 
         'Test::More'   => 0,
         'Siffra::Base' => 0,
+        'Digest::MD5'  => 0,
     },
     BUILD_REQUIRES => {
         'Test::More'          => 0,
