@@ -268,11 +268,11 @@ sub executeQuery()
     my $sth = $self->prepareQuery( sql => $sql );
     my $res = $sth->execute() or die $self->{ database }->{ connection }->errstr;
 
-    my $rows;
+    my @rows;
     my $line;
-    push( @$rows, $line ) while ( $line = $sth->fetchrow_hashref );
+    push( @rows, $line ) while ( $line = $sth->fetchrow_hashref );
 
-    return $rows;
+    return @rows;
 } ## end sub executeQuery
 
 =head2 C<teste()>
