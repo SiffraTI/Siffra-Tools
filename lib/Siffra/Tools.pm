@@ -266,9 +266,13 @@ sub executeQuery()
     $self->connectDB() unless ( defined( $self->{ database }->{ connection } ) );
 
     my $sth = $self->prepareQuery( sql => $sql );
-    my $res = $sth->execute();
+    my $res = $sth->execute() or die $self->{ database }->{ connection }->errstr;
 
-    return $sth;
+    my $rows;
+    my $line;
+    push( @$rows, $line ) while ( $line = $sth->fetchrow_hashref );
+
+    return $rows;
 } ## end sub executeQuery
 
 =head2 C<teste()>
