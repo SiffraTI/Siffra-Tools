@@ -324,6 +324,194 @@ sub getFileMD5()
     return $return;
 } ## end sub getFileMD5
 
+=head2 C<parseBlockText()>
+=cut
+
+sub parseBlockText()
+{
+    my $me     = ( caller( 0 ) )[ 3 ];
+    my $parent = ( caller( 1 ) )[ 3 ];
+    $log->debug( "parseBlockText", { package => __PACKAGE__, file => __FILE__, me => $me, parent => $parent } );
+
+    my ( $self, %parameters ) = @_;
+    my $file        = $parameters{ file };
+    my $layout      = $parameters{ layout };
+    my $length_type = $parameters{ length_type };
+    my $retorno     = { rows => undef, error => 0, message => undef, };
+
+    if ( !$file || !-e $file )
+    {
+        $log->error( "O arquivo [ $file ] não existe..." );
+        $retorno->{ message } = 'Arquivo não existe';
+        $retorno->{ error }   = TRUE;
+        return $retorno;
+    } ## end if ( !$file || !-e $file...)
+
+    $log->info( "Começando a parsear o arquivo [ $file ]..." );
+    open FH, "<", $file or die "Erro ao abrir o arquivo [ $file ]...";
+    while ( my $linha = <FH> )
+    {
+        $linha =~ s/\n|\r//g;
+
+        my $tipo_de_registro = substr( $linha, 0, $length_type );
+        my $posicao          = 0;
+        my $auxiliar         = ();
+
+        if ( !$layout->{ $tipo_de_registro } )
+        {
+            $log->error( "Erro no layout do arquivo...." );
+            p $layout->{ $tipo_de_registro };
+            return FALSE;
+        } ## end if ( !$layout->{ $tipo_de_registro...})
+        my $tamanho_da_linha_no_layout  = $layout->{ $tipo_de_registro }->{ total_length };
+        my $tamanho_da_linha_no_arquivo = length( $linha );
+
+        if ( $tamanho_da_linha_no_arquivo != $tamanho_da_linha_no_layout )
+        {
+            $log->error( "Tamanho da linha do tipo $tipo_de_registro no arquivo $file ($tamanho_da_linha_no_arquivo) esta diferente do layout ($tamanho_da_linha_no_layout)" );
+            return FALSE;
+        }
+
+        foreach my $field ( @{ $layout->{ $tipo_de_registro }->{ fields } } )
+        {
+            $auxiliar->{ $field->{ field } } = $self->trim( substr( $linha, $posicao, $field->{ length } ) );
+            $posicao += $field->{ length };
+
+            my $out = $field->{ out };
+
+            if ( $field->{ match } && $auxiliar->{ $field->{ field } } =~ /$field->{match}/ )
+            {
+                if ( $out )
+                {
+                    $out =~ s/\?\?\?/$auxiliar->{ $field->{field} }/g;
+                    $auxiliar->{ $field->{ field } } = eval( $out );
+                }
+            } ## end if ( $field->{ match }...)
+            elsif ( $out && $out !~ /\$/ )
+            {
+                $out =~ s/\?\?\?/$auxiliar->{ $field->{field} }/g;
+                $auxiliar->{ $field->{ field } } = eval( $out );
+            }
+        } ## end foreach my $field ( @{ $layout...})
+
+        push( @{ $retorno->{ rows }->{ $tipo_de_registro } }, $auxiliar );
+    } ## end while ( my $linha = <FH> ...)
+    return $retorno;
+} ## end sub parseBlockText
+
+=head2 C<trim()>
+=cut
+
+sub parseCSV()
+{
+    my ( $self, %parameters ) = @_;
+    my $file     = $parameters{ file };
+    my $sep_char = $parameters{ sep_char } // ',';
+    my $encoding = $parameters{ encoding } // 'iso-8859-1';
+    my $retorno  = { rows => undef, error => 0, message => undef, };
+
+    $log->info( "Começando a parsear o arquivo [ $file ]..." );
+
+    # Read/parse CSV
+    eval { require Text::CSV_XS; };
+
+    if ( $@ )
+    {
+        $log->error( $@ );
+        return $retorno;
+    }
+
+    my $csv = eval {
+
+        Text::CSV_XS->new(
+            {
+                binary         => 1,
+                auto_diag      => 0,
+                diag_verbose   => 0,
+                blank_is_undef => 1,
+                empty_is_undef => 1,
+                sep_char       => $sep_char,
+            }
+        );
+
+    };
+
+    if ( $@ )
+    {
+        $log->error( $@ );
+        $retorno->{ error }   = 1;
+        $retorno->{ message } = $@;
+    } ## end if ( $@ )
+    else
+    {
+        $csv->callbacks(
+            after_parse => sub {
+
+                # Limpar os espaços em branco no começo e no final de cada campo.
+                map { $_ ? ( s/^\s+|\s+$//g ) : $_ } @{ $_[ 1 ] };
+            },
+
+            #error => sub {
+            #    my ( $err, $msg, $pos, $recno, $fldno ) = @_;
+            #    Text::CSV_XS->SetDiag(0);
+            #    return;
+            #}
+        );
+        my @rows;
+        open my $fh, "<:encoding($encoding)", $file or die "$file->{path}: $!";
+
+        if ( $encoding =~ /utf-8/i )
+        {
+            my @header = $csv->header( $fh, { detect_bom => 1, munge_column_names => "uc" } );
+            $retorno->{ header } = \@header;
+        }
+        else
+        {
+            my @header = $csv->header( $fh, { munge_column_names => "uc" } );
+            $retorno->{ header } = \@header;
+        }
+
+        while ( my $row = $csv->getline( $fh ) )
+        {
+            push @rows, $row;
+        }
+        close $fh;
+
+        my ( $cde, $str, $pos, $rec, $fld ) = $csv->error_diag();
+
+        if ( $cde > 0 && $cde != 2012 )
+        {
+            $rec--;
+            undef @rows;
+            $retorno->{ error }   = $cde;
+            $retorno->{ message } = "$str @ rec $rec, pos $pos, field $fld";
+        } ## end if ( $cde > 0 && $cde ...)
+        else
+        {
+            @{ $retorno->{ rows } } = @rows;
+        }
+    } ## end else [ if ( $@ ) ]
+
+    return $retorno;
+} ## end sub parseCSV
+
+=head2 C<trim()>
+=cut
+
+sub trim()
+{
+    my ( $self, $string ) = @_;
+
+    eval { $string =~ s/^\s+|\s+$//g; };
+
+    if ( $@ )
+    {
+        $log->error( "Erro ao fazer o trim na string $string" );
+    }
+
+    return $string;
+} ## end sub trim
+
 #################### main pod documentation begin ###################
 ## Below is the stub of documentation for your module.
 ## You better edit it!
