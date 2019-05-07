@@ -22,7 +22,7 @@ use constant {
 my %driverConnections = (
     pgsql => {
         module => 'DBD::Pg',
-        dsn    => 'DBI:Pg(AutoCommit=>1,RaiseError=>1,PrintError=>0):dbname=%s;host=%s;port=%s',
+        dsn    => 'DBI:Pg(AutoCommit=>1,RaiseError=>1,PrintError=>1):dbname=%s;host=%s;port=%s',
     },
     mysql => {
         module => 'DBD::mysql',
@@ -40,7 +40,7 @@ BEGIN
     require Siffra::Base;
     use Exporter ();
     use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
-    $VERSION = '0.05';
+    $VERSION = '0.06';
     @ISA     = qw(Siffra::Base Exporter);
 
     #Give a hoot don't pollute, do not export more than needed by default
@@ -359,18 +359,25 @@ sub parseBlockText()
 
         if ( !$layout->{ $tipo_de_registro } )
         {
-            $log->error( "Erro no layout do arquivo...." );
-            p $layout->{ $tipo_de_registro };
-            return FALSE;
+            my $msg = "Erro no layout do arquivo....";
+            $log->error( $msg );
+            $retorno->{ rows }    = undef;
+            $retorno->{ message } = $msg;
+            $retorno->{ error }   = 1;
+            return $retorno;
         } ## end if ( !$layout->{ $tipo_de_registro...})
         my $tamanho_da_linha_no_layout  = $layout->{ $tipo_de_registro }->{ total_length };
         my $tamanho_da_linha_no_arquivo = length( $linha );
 
         if ( $tamanho_da_linha_no_arquivo != $tamanho_da_linha_no_layout )
         {
-            $log->error( "Tamanho da linha do tipo $tipo_de_registro no arquivo $file ($tamanho_da_linha_no_arquivo) esta diferente do layout ($tamanho_da_linha_no_layout)" );
-            return FALSE;
-        }
+            my $msg = "Tamanho da linha do tipo $tipo_de_registro no arquivo $file ($tamanho_da_linha_no_arquivo) esta diferente do layout ($tamanho_da_linha_no_layout)";
+            $log->error( $msg );
+            $retorno->{ rows }    = undef;
+            $retorno->{ message } = $msg;
+            $retorno->{ error }   = 1;
+            return $retorno;
+        } ## end if ( $tamanho_da_linha_no_arquivo...)
 
         foreach my $field ( @{ $layout->{ $tipo_de_registro }->{ fields } } )
         {
