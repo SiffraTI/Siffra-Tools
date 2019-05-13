@@ -406,7 +406,7 @@ sub parseBlockText()
     return $retorno;
 } ## end sub parseBlockText
 
-=head2 C<trim()>
+=head2 C<parseCSV()>
 =cut
 
 sub parseCSV()

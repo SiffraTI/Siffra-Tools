@@ -6,6 +6,7 @@ MANIFEST
 MANIFEST.SKIP
 README
 Siffra-Tools-0.02.tar.gz
+Siffra-Tools-0.06.tar.gz
 t/001_load.t
 t/pod-coverage.t
 t/pod.t
