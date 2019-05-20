@@ -1,4 +1,6 @@
 Changes
+dist.sh
+install.sh
 lib/Siffra/Tools.pm
 LICENSE
 Makefile.PL
