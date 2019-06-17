@@ -40,7 +40,7 @@ BEGIN
     require Siffra::Base;
     use Exporter ();
     use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
-    $VERSION = '0.09';
+    $VERSION = '0.10';
     @ISA     = qw(Siffra::Base Exporter);
 
     #Give a hoot don't pollute, do not export more than needed by default
@@ -539,6 +539,29 @@ sub trim()
     return $string;
 } ## end sub trim
 
+=head2 C<getTimeStampHash()>
+=cut
+
+#-------------------------------------------------------------------------------
+# Retorna o timestamp atual do sistema em forma de HASH
+#-------------------------------------------------------------------------------
+sub getTimeStampHash
+{
+    my ( $self, %parameters ) = @_;
+    my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime( time );
+
+    {
+        year  => $year + 1900,
+        month => sprintf( '%02d', ( $mon + 1 ) ),
+        day   => sprintf( '%02d', $mday ),
+        hour  => sprintf( '%02d', $hour ),
+        min   => sprintf( '%02d', $min ),
+        sec   => sprintf( '%02d', $sec ),
+        wday  => $wday,
+        yday  => $yday,
+        isdst => $isdst
+    };
+} ## end sub getTimeStampHash
 #################### main pod documentation begin ###################
 ## Below is the stub of documentation for your module.
 ## You better edit it!
