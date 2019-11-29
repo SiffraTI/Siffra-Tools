@@ -40,7 +40,7 @@ BEGIN
     require Siffra::Base;
     use Exporter ();
     use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
-    $VERSION = '0.23';
+    $VERSION = '0.24';
     @ISA     = qw(Siffra::Base Exporter);
 
     #Give a hoot don't pollute, do not export more than needed by default
@@ -466,6 +466,7 @@ sub parseCSV()
                 allow_loose_quotes => 0,
                 sep_char           => $sep_char,
                 quote_char         => $quote_char,
+                strict             => 1,
             }
         );
 
@@ -509,15 +510,14 @@ sub parseCSV()
             );
         };
 
-        my ( $cde, $str, $pos, $rec, $fld ) = $csv->error_diag();
-        if ( $cde > 0 )
+        my ( $errorCode, $errorMessage, $position, $line, $field ) = $csv->error_diag();
+        if ( $errorCode > 0 )
         {
-            $rec--;
             undef @rows;
-            $retorno->{ error }   = $cde;
-            $retorno->{ message } = "$str @ rec $rec, pos $pos, field $fld";
+            $retorno->{ error }   = $errorCode;
+            $retorno->{ message } = "$errorMessage @ linha $line, posição $position, campo $field";
             return $retorno;
-        } ## end if ( $cde > 0 )
+        } ## end if ( $errorCode > 0 )
         $retorno->{ header } = \@header;
 
         if ( $originalHeader )
@@ -541,15 +541,18 @@ sub parseCSV()
         }
         close $fh;
 
-        ( $cde, $str, $pos, $rec, $fld ) = $csv->error_diag();
+        ( $errorCode, $errorMessage, $position, $line, $field ) = $csv->error_diag();
 
-        if ( $cde > 0 && $cde != 2012 )
+        if ( $errorCode > 0 && $errorCode != 2012 )
         {
-            $rec--;
             undef @rows;
-            $retorno->{ error }   = $cde;
-            $retorno->{ message } = "$str @ rec $rec, pos $pos, field $fld";
-        } ## end if ( $cde > 0 && $cde ...)
+            if ( $errorMessage =~ /Inconsistent number of fields/i )
+            {
+                $errorMessage = 'Número inconsistente de campos';
+            }
+            $retorno->{ error }   = $errorCode;
+            $retorno->{ message } = "$errorMessage @ linha $line, posição $position, campo $field";
+        } ## end if ( $errorCode > 0 &&...)
         else
         {
             @{ $retorno->{ rows } } = @rows;
