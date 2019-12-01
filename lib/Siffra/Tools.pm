@@ -19,6 +19,9 @@ use constant {
     DEBUG => $ENV{ DEBUG } // 0,
 };
 
+use MIME::Types;
+use IO::Uncompress::Unzip qw(unzip $UnzipError);
+
 my %driverConnections = (
     pgsql => {
         module => 'DBD::Pg',
@@ -40,7 +43,7 @@ BEGIN
     require Siffra::Base;
     use Exporter ();
     use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
-    $VERSION = '0.24';
+    $VERSION = '0.25';
     @ISA     = qw(Siffra::Base Exporter);
 
     #Give a hoot don't pollute, do not export more than needed by default
@@ -356,9 +359,28 @@ sub parseBlockText()
         return $retorno;
     } ## end if ( !$file || !-e $file...)
 
+    my $fh;
+    my $types = MIME::Types->new;
+    my $mime  = $types->mimeTypeOf( $file );
+
+    if ( $mime->{ MT_type } =~ /application\/zip/ )
+    {
+        $log->info( "Arquivo zipado, tentando descompactar..." );
+        $fh = new IO::Uncompress::Unzip $file or die "IO::Uncompress::Unzip failed: $UnzipError\n";
+        $log->info( "Arquivo descompactado com sucesso..." );
+
+        my $HeaderInfo         = $fh->getHeaderInfo();
+        my $UncompressedLength = $HeaderInfo->{ UncompressedLength }->get64bit();
+
+    } ## end if ( $mime->{ MT_type ...})
+    else
+    {
+        open $fh, "<:encoding(UTF-8)", $file or die "Erro ao abrir o arquivo [ $file ]...\n";
+    }
+
     $log->info( "Começando a parsear o arquivo [ $file ]..." );
-    open FH, "<:encoding(UTF-8)", $file or die "Erro ao abrir o arquivo [ $file ]...";
-    while ( my $linha = <FH> )
+
+    while ( my $linha = <$fh> )
     {
         $linha =~ s/\n|\r//g;
 
@@ -426,7 +448,7 @@ sub parseBlockText()
         } ## end foreach my $field ( @{ $layout...})
 
         push( @{ $retorno->{ rows }->{ $tipo_de_registro } }, $auxiliar );
-    } ## end while ( my $linha = <FH> ...)
+    } ## end while ( my $linha = <$fh>...)
     return $retorno;
 } ## end sub parseBlockText
 
@@ -495,7 +517,24 @@ sub parseCSV()
         );
 
         my @rows;
-        open my $fh, "<:encoding($encoding)", $file or die "$file->{path}: $!";
+        my $fh;
+        my $types = MIME::Types->new;
+        my $mime  = $types->mimeTypeOf( $file );
+
+        if ( $mime->{ MT_type } =~ /application\/zip/ )
+        {
+            $log->info( "Arquivo zipado, tentando descompactar..." );
+            $fh = new IO::Uncompress::Unzip $file or die "IO::Uncompress::Unzip failed: $UnzipError\n";
+            $log->info( "Arquivo descompactado com sucesso..." );
+
+            my $HeaderInfo         = $fh->getHeaderInfo();
+            my $UncompressedLength = $HeaderInfo->{ UncompressedLength }->get64bit();
+
+        } ## end if ( $mime->{ MT_type ...})
+        else
+        {
+            open $fh, "<:encoding($encoding)", $file or die "Erro ao abrir o arquivo [ $file ]...\n";
+        }
 
         my @header = eval {
             $csv->header(
@@ -543,6 +582,10 @@ sub parseCSV()
 
         ( $errorCode, $errorMessage, $position, $line, $field ) = $csv->error_diag();
 
+        # 2012 "EOF - End of data in parsing input stream"
+        # 2014 "ENF - Inconsistent number of fields"
+        # 2023 "EIQ - QUO character not allowed"
+        # 2027 "EIQ - Quoted field not terminated"
         if ( $errorCode > 0 && $errorCode != 2012 )
         {
             undef @rows;
